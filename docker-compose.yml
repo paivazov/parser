@@ -1,0 +1,24 @@
+version: '3.5'
+
+
+# This config is for development purposes only
+
+
+volumes:
+  pip_cache:
+#  virtual_environment:
+  database:
+
+services:
+  database:
+    image: postgres:14.5-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=database
+      - POSTGRES_PASSWORD=db_user123
+      - POSTGRES_USER=db_user
+      - POSTGRES_HOST_AUTH_METHOD=trust
+    volumes:
+      - database:/var/lib/postgres/data
+      - ./configs/postgresql.conf:/etc/postgresql/postgresql.conf:ro
