@@ -7,9 +7,10 @@ import requests
 from bs4 import BeautifulSoup, Tag
 from fake_user_agent import user_agent
 from requests import Response
+from requests.exceptions import ChunkedEncodingError
 
 from db import get_session
-from db.models import ParsedData
+from app.models import ParsedData
 
 
 class Parser:
@@ -19,12 +20,17 @@ class Parser:
         self.domain = 'https://www.kijiji.ca'
         self.session = get_session()
 
-    def get_response(self) -> Union[Response, str]:
-        path = f"/b-apartments-condos/city-of-toronto/page-{self.page}/c37l1700273"
+    def get_response(self, path) -> Union[Response, str]:
         headers = {"user-agent": user_agent("chrome")}
         link = self.domain + path
         print("Link: " + link)
-        response = requests.get(link, headers=headers)
+        try:
+            response = requests.get(link, headers=headers)
+        except ChunkedEncodingError:
+            return (
+                "Connection broken because of invalid chunk length.\n"
+                "Try to reconnect parser."
+            )
         status = response.status_code
         if status == 200:
             return response
@@ -42,10 +48,7 @@ class Parser:
 
     def parse_price(self, price: str) -> dict:
         re_price = re.search(r"(\$)(\d+,\d+)", price)
-        result = {
-            "currency": self.__NO_INFO,
-            "price": self.__NO_INFO
-        }
+        result = {"currency": self.__NO_INFO, "price": self.__NO_INFO}
         if re_price is not None:
             parsed_price = re_price.groups()
             result.update(currency=parsed_price[0], price=parsed_price[1])
@@ -63,15 +66,18 @@ class Parser:
     def _extract_text_or_no_info(self, bs4_tag: Union[Tag, None]) -> str:
         return self.__NO_INFO if bs4_tag is None else bs4_tag.text.strip()
 
-    def _find_attr_in_tag_or_no_info(self, bs4_tag: Union[Tag, None],
-                                     attr: str) -> str:
+    def _find_attr_in_tag_or_no_info(
+        self, bs4_tag: Union[Tag, None], attr: str
+    ) -> str:
         return self.__NO_INFO if bs4_tag is None else bs4_tag[attr]
 
     def parse_html_page(self):
+        path = f"/b-apartments-condos/city-of-toronto/page-{self.page}/c37l1700273"
         result = []
         while True:
-            print(f"Parsing page {self.page}.")
-            response = self.get_response()
+            print(f"\nParsing page.")
+
+            response = self.get_response(path)
             time.sleep(2)
             if isinstance(response, str):
                 print(response)
@@ -83,7 +89,9 @@ class Parser:
             for ad in ads:
                 bedrooms = self.extract_bedrooms_info(
                     self._extract_text_or_no_info(
-                        ad.find_next("span", class_="bedrooms")))
+                        ad.find_next("span", class_="bedrooms")
+                    )
+                )
                 location = ad.find_next("div", class_="location")
                 city = location.find_next("span", class_="")
                 date = location.find_next("span", class_="date-posted")
@@ -92,41 +100,49 @@ class Parser:
                 price = ad.find_next("div", class_="price")
                 description = ad.find_next("div", class_="description")
                 parsed_price = self.parse_price(
-                    self._extract_text_or_no_info(price))
+                    self._extract_text_or_no_info(price)
+                )
 
-                result.append({
-                    "image_url": self._find_attr_in_tag_or_no_info(image,
-                                                                   "srcset"),
-                    "ad_link": self.domain + self._find_attr_in_tag_or_no_info(
-                        title.find("a"),
-                        "href"),
-                    "title": self._extract_text_or_no_info(title),
-                    "currency": parsed_price["currency"],
-                    "price": parsed_price["price"],
-                    "city": self._extract_text_or_no_info(city),
-                    "date": self.convert_date_format(
-                        self._extract_text_or_no_info(date)),
-                    "description": self._extract_text_or_no_info(description),
-                    "bedrooms": bedrooms
-                })
+                result.append(
+                    {
+                        "image_url": self._find_attr_in_tag_or_no_info(
+                            image, "srcset"
+                        ),
+                        "ad_link": self.domain
+                        + self._find_attr_in_tag_or_no_info(
+                            title.find("a"), "href"
+                        ),
+                        "title": self._extract_text_or_no_info(title),
+                        "currency": parsed_price["currency"],
+                        "price": parsed_price["price"],
+                        "city": self._extract_text_or_no_info(city),
+                        "date": self.convert_date_format(
+                            self._extract_text_or_no_info(date)
+                        ),
+                        "description": self._extract_text_or_no_info(
+                            description
+                        ),
+                        "bedrooms": bedrooms,
+                    }
+                )
 
             with self.session() as session:
                 session.bulk_insert_mappings(ParsedData, result)
                 session.commit()
-                print("Parsed data has been inserted to database.")
-
-            try:
-                # не находит этот класс. пагинация работает криво
-                print(soup.find("a", title="Next").contents)
-            except AttributeError:
+                print(
+                    "Parsed data of this page has been inserted to database."
+                )
+            path = soup.find("div", class_="pagination").find_next(
+                "a", title='Next'
+            )
+            if path is None:
                 print("No more pages. Parsing was stopped.")
                 break
-
-                # session.close()
-
-            self.page += 1
+            else:
+                path = path["href"]
 
 
 if __name__ == '__main__':
-    parser = Parser(start_page=90)
-    parser.parse_html_page()
+    print(
+        "To start parser script please run python entrypoint.py [page number]"
+    )

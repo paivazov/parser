@@ -1,6 +1,6 @@
-from sqlalchemy import Column, String, Text, Date
+from sqlalchemy import Column, String, Text
 
-from . import Base
+from db import Base
 
 
 class ParsedData(Base):
@@ -15,8 +15,3 @@ class ParsedData(Base):
     description = Column(Text)
     bedrooms = Column(String)
     date = Column(String(10))
-
-
-
-
-
