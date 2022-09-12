@@ -14,12 +14,15 @@ All you need is to run the following command from root directory of the project:
 ```shell
 make
 ```
+After that, docker will build container and start parse site:
+![img_1.png](images/img_1.png)
+
 After first run recommended to use this command:
 ```shell
 make parse
 ```
 ---
-### Extended commands
+## Extended commands
 To apply migrations:
 ```shell
 make migrations
@@ -42,3 +45,5 @@ cd db
 alembic upgrade head
 ```
 
+## DB dump
+Also, repo has example of dump in dump.csv file.
