@@ -46,4 +46,4 @@ alembic upgrade head
 ```
 
 ## DB dump
-Also, repo has example of dump in dump.csv file.
+Also, repo has example of dump in [dump.csv](./dump.csv) file.
