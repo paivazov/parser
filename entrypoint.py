@@ -12,7 +12,7 @@ if __name__ == '__main__':
     try:
         args = ap.parse_args()
         parser = Parser(start_page=args.start_page)
-        parser.parse_html_page()
+        parser.parse_site()
     except Exception as e:
         print(e)
         ap.print_help()
